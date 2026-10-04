@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compression Engine v0.1 | CVE1 Binary Container & LZ Engine</title>
+  <meta name="description" content="High-performance binary compression engine featuring sliding window LZ encoding, versioned CVE1 container, CRC32 block validation, and automatic STORE fallback.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z'/></svg>">
+</head>
+<body>
+  <div class="app-container">
+    <!-- App Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo-icon">🗜️</div>
+        <div class="brand-info">
+          <h1>COMPRESSION ENGINE</h1>
+          <div class="brand-badge-row">
+            <span class="badge-version">v0.1.0</span>
+            <span class="badge-spec">CVE1 Container Format • LZ + STORE</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-status-section">
+        <div id="backend-status-pill" class="status-pill online" title="Status of the Java Engine Backend">
+          <span class="status-dot"></span>
+          <span id="backend-status-text">Checking Java Engine...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs-nav" aria-label="Main Navigation">
+      <button class="tab-btn active" id="tab-compress" data-target="pane-compress">
+        <span class="tab-icon">🗜️</span>
+        <span>Compress File</span>
+      </button>
+      <button class="tab-btn" id="tab-decompress" data-target="pane-decompress">
+        <span class="tab-icon">🔓</span>
+        <span>Decompress File</span>
+      </button>
+      <button class="tab-btn" id="tab-inspect" data-target="pane-inspect">
+        <span class="tab-icon">🔍</span>
+        <span>Inspect Container (.cve)</span>
+      </button>
+      <button class="tab-btn" id="tab-sandbox" data-target="pane-sandbox">
+        <span class="tab-icon">🔬</span>
+        <span>Algorithm Sandbox</span>
+      </button>
+      <button class="tab-btn" id="tab-guide" data-target="pane-guide">
+        <span class="tab-icon">📖</span>
+        <span>Architecture & CLI</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: COMPRESS -->
+    <main id="pane-compress" class="tab-pane active">
+      <div class="grid-2col">
+        <!-- Input & Options Card -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>Compress to CVE1 Container</span>
+            <span class="badge-version">Streaming File API</span>
+          </div>
+          <p class="card-subtitle">Upload any document, log file, text or binary data to pack it into a versioned <code>.cve</code> container.</p>
+
+          <!-- Dropzone -->
+          <div class="dropzone" id="compress-dropzone">
+            <div class="dropzone-icon">📥</div>
+            <div class="dropzone-text">Drag & drop your file here</div>
+            <div class="dropzone-hint">or click to browse from your computer</div>
+            <input type="file" id="compress-file-input" class="file-input-hidden">
+          </div>
+
+          <!-- Selected File Card -->
+          <div class="selected-file-card" id="compress-selected-card">
+            <div class="selected-file-info">
+              <div class="file-type-icon">📄</div>
+              <div>
+                <div class="selected-file-name" id="compress-selected-name">filename.txt</div>
+                <div class="selected-file-size" id="compress-selected-size">0 KB</div>
+              </div>
+            </div>
+            <button class="btn-secondary" id="compress-remove-file-btn" style="padding: 4px 10px; font-size: 11px;">Change</button>
+          </div>
+
+          <!-- Sample Files -->
+          <div class="samples-bar">
+            <span class="samples-label">Or load a sample file:</span>
+            <div class="sample-chips">
+              <button class="sample-chip" data-sample="repetitive">📝 Repetitive Text (High Ratio)</button>
+              <button class="sample-chip" data-sample="json">📊 Server JSON Logs</button>
+              <button class="sample-chip" data-sample="code">☕ Java Code Pattern</button>
+              <button class="sample-chip" data-sample="random">🎲 Random Entropy (STORE Fallback)</button>
+            </div>
+          </div>
+
+          <!-- Tuning Options Accordion -->
+          <div class="options-panel">
+            <div class="options-header" id="compress-options-toggle">
+              <span>⚙️ Compression Tuning Options</span>
+              <span id="compress-options-arrow">▾</span>
+            </div>
+            <div class="options-content" id="compress-options-body">
+              <div class="form-group">
+                <label class="form-label" for="opt-block-size">
+                  <span>Block Size</span>
+                  <span class="form-value-badge" id="lbl-block-size">1 MB</span>
+                </label>
+                <select id="opt-block-size" class="form-select">
+                  <option value="65536">64 KB (Small chunks)</option>
+                  <option value="262144">256 KB</option>
+                  <option value="1048576" selected>1 MB (Default standard)</option>
+                  <option value="4194304">4 MB (Large blocks)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="opt-window-size">
+                  <span>Sliding Window</span>
+                  <span class="form-value-badge" id="lbl-window-size">32 KB</span>
+                </label>
+                <select id="opt-window-size" class="form-select">
+                  <option value="4096">4 KB (Fast)</option>
+                  <option value="16384">16 KB</option>
+                  <option value="32768" selected>32 KB (Default)</option>
+                  <option value="65536">64 KB (Deep match)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="opt-min-match">
+                  <span>Min Match Length</span>
+                  <span class="form-value-badge" id="lbl-min-match">3 bytes</span>
+                </label>
+                <input type="range" id="opt-min-match" class="form-range" min="3" max="8" value="3">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="opt-max-match">
+                  <span>Max Match Length</span>
+                  <span class="form-value-badge" id="lbl-max-match">255 bytes</span>
+                </label>
+                <input type="range" id="opt-max-match" class="form-range" min="32" max="255" value="255">
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Button -->
+          <button class="btn-primary" id="btn-run-compress" disabled>
+            <span>🗜️ Compress File to .cve</span>
+          </button>
+        </div>
+
+        <!-- Output Results Card -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>Compression Analytics</span>
+            <span class="badge-version" id="compress-engine-badge">Engine v0.1</span>
+          </div>
+          <p class="card-subtitle">Real-time container breakdown, compression ratio, space reduction, and CRC32 verification.</p>
+
+          <div id="compress-placeholder" style="text-align: center; padding: 60px 20px; color: var(--text-subtle);">
+            <div style="font-size: 48px; margin-bottom: 12px; opacity: 0.5;">📊</div>
+            <div style="font-weight: 600; font-size: 15px; color: var(--text-muted);">No compression run yet</div>
+            <div style="font-size: 13px; margin-top: 4px;">Select or drop a file on the left and click "Compress File"</div>
+          </div>
+
+          <!-- Active Results -->
+          <div class="results-container" id="compress-results-area">
+            <!-- Metrics Row -->
+            <div class="metrics-row">
+              <div class="metric-card">
+                <span class="metric-label">Original</span>
+                <span class="metric-value" id="res-orig-size">0 B</span>
+                <span class="metric-sub">Raw input payload</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Compressed</span>
+                <span class="metric-value highlight-cyan" id="res-comp-size">0 B</span>
+                <span class="metric-sub">Container footprint</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Space Saved</span>
+                <span class="metric-value highlight-emerald" id="res-savings">0%</span>
+                <span class="metric-sub">Reduction factor</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Ratio / Time</span>
+                <span class="metric-value" id="res-ratio">1.00x</span>
+                <span class="metric-sub" id="res-time">0 ms</span>
+              </div>
+            </div>
+
+            <!-- Storage Visualizer Bar -->
+            <div class="storage-bar-card">
+              <div class="storage-bar-header">
+                <span>Payload Footprint Comparison</span>
+                <span id="storage-bar-percent" style="color: #34d399; font-family: var(--font-mono);">0% smaller</span>
+              </div>
+              <div class="storage-track">
+                <div class="storage-fill" id="storage-bar-fill"></div>
+              </div>
+            </div>
+
+            <!-- Block Breakdown Table -->
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Block Registry Details</span>
+                <span style="font-size: 12px; color: var(--text-subtle);" id="res-block-count-badge">1 Block</span>
+              </div>
+              <div class="table-wrapper">
+                <table class="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Block #</th>
+                      <th>Method</th>
+                      <th>Original</th>
+                      <th>Compressed</th>
+                      <th>CRC32</th>
+                      <th>Ratio</th>
+                    </tr>
+                  </thead>
+                  <tbody id="compress-blocks-tbody">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Download Button -->
+            <button class="btn-primary btn-download" id="btn-download-cve">
+              <span>⬇️ Download Compressed .cve Container</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 2: DECOMPRESS -->
+    <section id="pane-decompress" class="tab-pane">
+      <div class="grid-2col">
+        <!-- Decompress Input -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>Decompress .cve Container</span>
+            <span class="badge-version">CRC32 Integrity Guard</span>
+          </div>
+          <p class="card-subtitle">Upload any <code>.cve</code> container file. The engine will unpack independent blocks and verify per-block CRC32 checksums.</p>
+
+          <div class="dropzone" id="decompress-dropzone">
+            <div class="dropzone-icon">📦</div>
+            <div class="dropzone-text">Drop your .cve container here</div>
+            <div class="dropzone-hint">or click to browse (.cve format)</div>
+            <input type="file" id="decompress-file-input" class="file-input-hidden" accept=".cve">
+          </div>
+
+          <div class="selected-file-card" id="decompress-selected-card">
+            <div class="selected-file-info">
+              <div class="file-type-icon">🗃️</div>
+              <div>
+                <div class="selected-file-name" id="decompress-selected-name">data.cve</div>
+                <div class="selected-file-size" id="decompress-selected-size">0 KB</div>
+              </div>
+            </div>
+            <button class="btn-secondary" id="decompress-remove-file-btn" style="padding: 4px 10px; font-size: 11px;">Change</button>
+          </div>
+
+          <button class="btn-primary" id="btn-run-decompress" style="background: linear-gradient(135deg, #10b981, #0284c7);" disabled>
+            <span>🔓 Decompress & Verify Container</span>
+          </button>
+        </div>
+
+        <!-- Decompress Results -->
+        <div class="glass-card">
+          <div class="card-title">
+            <span>Restoration & Integrity Report</span>
+            <span class="badge-version" id="decompress-integrity-badge">Ready</span>
+          </div>
+          <p class="card-subtitle">Container validation, block checksum checks, and restored file download.</p>
+
+          <div id="decompress-placeholder" style="text-align: center; padding: 60px 20px; color: var(--text-subtle);">
+            <div style="font-size: 48px; margin-bottom: 12px; opacity: 0.5;">🛡️</div>
+            <div style="font-weight: 600; font-size: 15px; color: var(--text-muted);">No container decompressed yet</div>
+            <div style="font-size: 13px; margin-top: 4px;">Upload a <code>.cve</code> file on the left and click "Decompress"</div>
+          </div>
+
+          <div class="results-container" id="decompress-results-area">
+            <div class="metrics-row">
+              <div class="metric-card">
+                <span class="metric-label">Container Size</span>
+                <span class="metric-value" id="decomp-res-container-size">0 B</span>
+                <span class="metric-sub">Packaged file</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Restored Size</span>
+                <span class="metric-value highlight-emerald" id="decomp-res-restored-size">0 B</span>
+                <span class="metric-sub">Exact uncompressed size</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Blocks Verified</span>
+                <span class="metric-value highlight-cyan" id="decomp-res-blocks">0</span>
+                <span class="metric-sub">Independent blocks</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Integrity Status</span>
+                <span class="metric-value highlight-emerald" style="font-size: 16px;">VALID ✅</span>
+                <span class="metric-sub" id="decomp-res-time">0 ms</span>
+              </div>
+            </div>
+
+            <!-- Block List -->
+            <div>
+              <div style="font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">Decompressed Blocks & CRC32 Verification</div>
+              <div class="table-wrapper">
+                <table class="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Block #</th>
+                      <th>Method</th>
+                      <th>Original Size</th>
+                      <th>Compressed</th>
+                      <th>Checksum (Hex)</th>
+                      <th>CRC Check</th>
+                    </tr>
+                  </thead>
+                  <tbody id="decompress-blocks-tbody">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Restored File Preview / Download -->
+            <div id="decomp-preview-box" style="display: none; margin-top: 8px;">
+              <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Restored Text Preview</span>
+              <div class="code-block" style="max-height: 120px; margin-top: 6px;">
+                <pre id="decomp-preview-text"></pre>
+              </div>
+            </div>
+
+            <button class="btn-primary btn-download" id="btn-download-restored">
+              <span>⬇️ Download Restored File</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: INSPECT -->
+    <section id="pane-inspect" class="tab-pane">
+      <div class="glass-card">
+        <div class="card-title">
+          <span>Container Binary Inspector</span>
+          <span class="badge-version">CVE1 Specification</span>
+        </div>
+        <p class="card-subtitle">Examine the 32-byte container header, block headers (24 bytes each), compression methods (STORE vs LZ), and CRC32 values without modifying the file.</p>
+
+        <div class="dropzone" id="inspect-dropzone" style="padding: 28px;">
+          <div class="dropzone-icon" style="font-size: 32px;">🔍</div>
+          <div class="dropzone-text">Drop any .cve file to inspect structure</div>
+          <input type="file" id="inspect-file-input" class="file-input-hidden" accept=".cve">
+        </div>
+
+        <div id="inspect-results-area" style="display: none; margin-top: 24px;">
+          <div class="grid-2col" style="margin-bottom: 24px;">
+            <!-- Header Spec Card -->
+            <div class="glass-card" style="background: rgba(15, 23, 42, 0.9);">
+              <div style="font-size: 14px; font-weight: 700; color: #38bdf8; margin-bottom: 12px;">CONTAINER HEADER (32 Bytes)</div>
+              <table class="custom-table">
+                <tbody>
+                  <tr><td style="color: var(--text-muted);">Magic Signature</td><td id="insp-magic" style="color: #34d399; font-weight: bold;">CVE1 (0x43564531)</td></tr>
+                  <tr><td style="color: var(--text-muted);">Container Version</td><td id="insp-version">1</td></tr>
+                  <tr><td style="color: var(--text-muted);">Container Flags</td><td id="insp-flags">0x00000000</td></tr>
+                  <tr><td style="color: var(--text-muted);">Original File Size</td><td id="insp-orig-size">0 bytes</td></tr>
+                  <tr><td style="color: var(--text-muted);">Configured Block Size</td><td id="insp-block-size">1,048,576 bytes (1 MB)</td></tr>
+                  <tr><td style="color: var(--text-muted);">Total Block Count</td><td id="insp-block-count">1</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Summary Card -->
+            <div class="glass-card" style="background: rgba(15, 23, 42, 0.9);">
+              <div style="font-size: 14px; font-weight: 700; color: #34d399; margin-bottom: 12px;">CONTAINER EFFICIENCY SUMMARY</div>
+              <div class="metrics-row" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px;">
+                <div class="metric-card">
+                  <span class="metric-label">Total File Size</span>
+                  <span class="metric-value" id="insp-total-file-size">0 B</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Overall Ratio</span>
+                  <span class="metric-value highlight-cyan" id="insp-overall-ratio">1.00x</span>
+                </div>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Overall Space Savings</span>
+                <span class="metric-value highlight-emerald" id="insp-overall-savings">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- All Blocks Table -->
+          <div>
+            <div style="font-size: 14px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">Block Descriptors (24-byte Header Per Block)</div>
+            <div class="table-wrapper" style="max-height: 400px;">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Block ID</th>
+                    <th>Method</th>
+                    <th>Original Size</th>
+                    <th>Compressed Size</th>
+                    <th>Savings %</th>
+                    <th>CRC32 Checksum</th>
+                    <th>Method Rationale</th>
+                  </tr>
+                </thead>
+                <tbody id="inspect-blocks-tbody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: ALGORITHM SANDBOX -->
+    <section id="pane-sandbox" class="tab-pane">
+      <div class="glass-card">
+        <div class="card-title">
+          <span>Live LZ Sliding Window & Token Visualizer</span>
+          <span class="badge-version">Interactive Algorithm Sandbox</span>
+        </div>
+        <p class="card-subtitle">Experiment with text patterns to see how the LZ sliding window identifies matches, computes (distance, length) pairs, and builds the 8-token flag byte representation.</p>
+
+        <div class="sandbox-input-area">
+          <label style="font-size: 13px; font-weight: 700; color: var(--text-muted);">Enter or paste test string:</label>
+          <textarea id="sandbox-input-text" class="sandbox-textarea" placeholder="Type text with repeated patterns to watch matches form...">Enterprise document metadata tenantId createdBy Enterprise document metadata tenantId createdBy compression engine v0.1</textarea>
+          
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="sample-chip" id="sandbox-btn-preset1">Repetitive Log Pattern</button>
+            <button class="sample-chip" id="sandbox-btn-preset2">DNA Sequence (ATCG...)</button>
+            <button class="sample-chip" id="sandbox-btn-preset3">JSON Structure</button>
+            <button class="sample-chip" id="sandbox-btn-preset4">Random High Entropy</button>
+          </div>
+        </div>
+
+        <div class="metrics-row" style="margin-bottom: 20px;">
+          <div class="metric-card">
+            <span class="metric-label">Raw Characters</span>
+            <span class="metric-value" id="sandbox-raw-len">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Encoded Bytes</span>
+            <span class="metric-value highlight-cyan" id="sandbox-encoded-len">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Compression Ratio</span>
+            <span class="metric-value highlight-emerald" id="sandbox-ratio">1.00x</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Selected Strategy</span>
+            <span class="metric-value" id="sandbox-strategy" style="font-size: 18px;">LZ</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Token Stream Visualization (Flag Byte + 8 Tokens Per Group)</span>
+          <div style="display: flex; gap: 12px; font-size: 11px;">
+            <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: rgba(59, 130, 246, 0.5);"></span> Literal Byte (0 bit)</span>
+            <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: rgba(16, 185, 129, 0.5);"></span> Match (dist, len) (1 bit)</span>
+          </div>
+        </div>
+
+        <div class="visual-token-stream" id="sandbox-token-stream">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: ARCHITECTURE & CLI GUIDE -->
+    <section id="pane-guide" class="tab-pane">
+      <div class="glass-card" style="margin-bottom: 24px;">
+        <div class="card-title">
+          <span>How It Works: Engine Architecture</span>
+          <span class="badge-version">Java 21/25 Native</span>
+        </div>
+        <p class="card-subtitle">Detailed breakdown of the container format, sliding window matching, and integrity guarantees.</p>
+
+        <div class="grid-2col" style="margin-top: 18px;">
+          <div>
+            <h3 style="font-size: 15px; color: #38bdf8; margin-bottom: 8px;">1. Versioned Container Layout (CVE1)</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+              Every compressed file begins with a fixed <strong>32-byte container header</strong>:
+            </p>
+            <ul style="font-size: 13px; color: var(--text-muted); margin-left: 20px; line-height: 1.6; margin-bottom: 16px;">
+              <li><code>Magic (4B)</code>: <code>0x43564531</code> ("CVE1")</li>
+              <li><code>Version (4B)</code>: Container version (currently 1)</li>
+              <li><code>Original Size (8B)</code>: Uncompressed payload byte length</li>
+              <li><code>Block Size (4B)</code>: Size of each independent chunk (default 1 MB)</li>
+              <li><code>Block Count (4B)</code>: Total blocks in container</li>
+            </ul>
+
+            <h3 style="font-size: 15px; color: #38bdf8; margin-bottom: 8px;">2. Block-Based Architecture & CRC32</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+              Data is segmented into independent 1 MB blocks. Each block has a <strong>24-byte header</strong> storing the block ID, original size, compressed size, compression method ID, and an <strong>IEEE 802.3 CRC32 checksum</strong> computed over the original uncompressed block. Upon decompression, the checksum is recalculated and strictly validated.
+            </p>
+          </div>
+
+          <div>
+            <h3 style="font-size: 15px; color: #34d399; margin-bottom: 8px;">3. Sliding Window LZ + 8-Token Flags</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+              The compressor maintains a sliding window (default 32 KB) over previously seen bytes. When a repeating sequence (min 3 bytes) is found, it encodes a 3-byte token: <code>(distance: 2 bytes, length: 1 byte)</code>.
+            </p>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+              Tokens are grouped in batches of 8, preceded by a <strong>1-byte flag mask</strong>:
+              bit <code>k = 0</code> indicates literal character (1 byte), while bit <code>k = 1</code> indicates a match token (3 bytes).
+            </p>
+
+            <h3 style="font-size: 15px; color: #fbbf24; margin-bottom: 8px;">4. Automatic STORE Fallback</h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+              When compressing high-entropy or pre-compressed data (e.g. encrypted files, JPEGs, ZIP archives), LZ token overhead would cause file expansion. The engine automatically detects this condition per-block: if <code>compressedSize >= originalSize</code>, it falls back to <code>STORE (method 0)</code>, guaranteeing zero negative expansion.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLI Guide Card -->
+      <div class="glass-card">
+        <div class="card-title">
+          <span>Command Line Interface (CLI) Cheatsheet</span>
+          <span class="badge-version">Terminal Commands</span>
+        </div>
+        <p class="card-subtitle">Run the compression engine directly in your terminal using the compiled Java classes.</p>
+
+        <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+          <!-- Command 1: Server -->
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">Start the Web Dashboard & API Server:</div>
+            <div class="code-block">
+              <pre>java -cp java/target/classes com.compression.cli.Main server 8080</pre>
+              <button class="btn-copy" data-copy="java -cp java/target/classes com.compression.cli.Main server 8080">Copy</button>
+            </div>
+          </div>
+
+          <!-- Command 2: Compress -->
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #34d399; margin-bottom: 6px;">Compress a file:</div>
+            <div class="code-block">
+              <pre>java -cp java/target/classes com.compression.cli.Main compress input.txt output.cve</pre>
+              <button class="btn-copy" data-copy="java -cp java/target/classes com.compression.cli.Main compress input.txt output.cve">Copy</button>
+            </div>
+          </div>
+
+          <!-- Command 3: Decompress -->
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #a78bfa; margin-bottom: 6px;">Decompress a container:</div>
+            <div class="code-block">
+              <pre>java -cp java/target/classes com.compression.cli.Main decompress output.cve restored.txt</pre>
+              <button class="btn-copy" data-copy="java -cp java/target/classes com.compression.cli.Main decompress output.cve restored.txt">Copy</button>
+            </div>
+          </div>
+
+          <!-- Command 4: Inspect -->
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #fbbf24; margin-bottom: 6px;">Inspect a container's header and blocks:</div>
+            <div class="code-block">
+              <pre>java -cp java/target/classes com.compression.cli.Main inspect output.cve</pre>
+              <button class="btn-copy" data-copy="java -cp java/target/classes com.compression.cli.Main inspect output.cve">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="cve-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

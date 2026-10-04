@@ -1,0 +1,24 @@
+# Compiled Java bytecode
+java/target/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+.settings/
+
+# Temporary files created during compression runs
+*.cve
+
+# Maven wrapper (not used here, but common)
+.mvn/
+
+# Scratch test files
+test_*.txt
+test_*.bin
