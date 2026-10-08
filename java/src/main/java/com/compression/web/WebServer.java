@@ -1,21 +1,30 @@
 package com.compression.web;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Random;
+
 import com.compression.CompressionEngine;
-import com.compression.api.CompressionMethod;
 import com.compression.api.CompressionOptions;
 import com.compression.container.ContainerFormat;
 import com.compression.container.ContainerReader;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-
-import java.io.*;
-import java.net.InetSocketAddress;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
 
 public final class WebServer {
     private static final int DEFAULT_PORT = 8080;
@@ -48,19 +57,27 @@ public final class WebServer {
     }
 
     public static HttpServer startServer(int preferredPort) throws IOException {
+        // Render provides the HTTP port through the PORT environment variable.
+        // Locally, fall back to the preferred port (normally 8080).
+        String renderPort = System.getenv("PORT");
+
         int port = preferredPort;
-        HttpServer server = null;
-        for (int i = 0; i < 10; i++) {
+        if (renderPort != null && !renderPort.isBlank()) {
             try {
-                server = HttpServer.create(new InetSocketAddress("localhost", port), 0);
-                break;
-            } catch (IOException e) {
-                port++;
+                port = Integer.parseInt(renderPort);
+            } catch (NumberFormatException ignored) {
+                System.err.println("Invalid PORT environment variable: " + renderPort
+                        + ". Falling back to port " + preferredPort);
             }
         }
-        if (server == null) {
-            throw new IOException("Could not bind HTTP server on port " + preferredPort + " to " + port);
-        }
+
+        // Bind to all network interfaces so Render can route external traffic
+        // to the application. Using "localhost" would make the service
+        // unreachable from outside the container.
+        HttpServer server = HttpServer.create(
+                new InetSocketAddress("0.0.0.0", port),
+                0
+        );
 
         server.createContext("/api/status", new StatusHandler());
         server.createContext("/api/compress", new CompressHandler());
@@ -74,7 +91,14 @@ public final class WebServer {
 
         System.out.println("==================================================================");
         System.out.println("  COMPRESSION ENGINE v0.1 - WEB DASHBOARD");
-        System.out.println("  URL: http://localhost:" + port);
+        String displayHost = "localhost";
+        String renderUrl = System.getenv("RENDER_EXTERNAL_URL");
+        if (renderUrl != null && !renderUrl.isBlank()) {
+            displayHost = renderUrl;
+        }
+
+        System.out.println("  URL: " + displayHost + (renderUrl == null || renderUrl.isBlank() ? ":" + port : ""));
+        System.out.println("  Bind Address: 0.0.0.0:" + port);
         System.out.println("  Web Root: " + WEB_DIR);
         System.out.println("  API Endpoints:");
         System.out.println("    - GET  /api/status");
